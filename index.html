@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Núcleo SCP Castelo Branco | Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="login-shell">
+    <div class="login-card">
+        <img src="assets/logo-clube.png" alt="Logo" class="login-logo" onerror="this.style.display='none'">
+        <div class="login-title">Núcleo SCP Castelo Branco</div>
+        <div class="login-subtitle">Gestão da equipa de futsal</div>
+
+        <div id="loginErro" class="login-error hidden"></div>
+
+        <form id="loginForm">
+            <div class="field">
+                <label>Nome de utilizador</label>
+                <input type="text" id="username" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" id="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px;">Entrar</button>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/supabaseClient.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        const { data: perfil } = await supabase.from('perfis').select('tipo_utilizador').eq('id', session.user.id).single();
+        if (perfil) window.location.href = perfil.tipo_utilizador === 'treinador' ? 'treinador.html' : 'jogador.html';
+    }
+})();
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erroBox = document.getElementById('loginErro');
+    erroBox.classList.add('hidden');
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    try {
+        await fazerLogin(username, password);
+        const { data: { session } } = await supabase.auth.getSession();
+        const { data: perfil } = await supabase.from('perfis').select('tipo_utilizador').eq('id', session.user.id).single();
+        window.location.href = perfil.tipo_utilizador === 'treinador' ? 'treinador.html' : 'jogador.html';
+    } catch (err) {
+        erroBox.textContent = 'Credenciais inválidas. Verifica o utilizador e a password.';
+        erroBox.classList.remove('hidden');
+    }
+});
+</script>
+</body>
+</html>

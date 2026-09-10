@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<title>Núcleo SCP Castelo Branco | Jogadora</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="topbar-club-logo"><img src="assets/logo-clube.png" onerror="this.style.display='none'"></div>
+        <div class="topbar-club-text">
+            <span class="topbar-name">Núcleo SCP Castelo Branco</span>
+            <span class="topbar-sigla">Futsal</span>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <div style="text-align:right;">
+            <div class="topbar-user" id="nomeUtilizadorTopo">—</div>
+            <div class="topbar-user-role">Jogadora</div>
+        </div>
+        <button class="topbar-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+</div>
+
+<div class="sidebar" id="sidebar">
+    <a href="#" data-view="plantel" class="active"><span class="ico">👥</span><span class="label">Plantel</span></a>
+    <a href="#" data-view="perfil"><span class="ico">🙋</span><span class="label">A minha ficha</span></a>
+    <a href="#" data-view="treinos"><span class="ico">🏃</span><span class="label">Treinos</span></a>
+    <a href="#" data-view="jogos"><span class="ico">⚽</span><span class="label">Jogos</span></a>
+    <a href="#" data-view="estatisticas"><span class="ico">📊</span><span class="label">Estatísticas</span></a>
+    <a href="#" data-view="calendario"><span class="ico">📅</span><span class="label">Calendário</span></a>
+</div>
+
+<div class="main">
+    <div id="view-plantel" class="view">
+        <div class="page-title">Plantel</div>
+        <div class="page-subtitle">Só se veem os dados públicos das colegas (nome, foto, posição, escalão). Os teus dados completos estão em "A minha ficha".</div>
+        <div class="card"><div id="rosterGrid" class="roster-grid"></div></div>
+    </div>
+
+    <div id="view-perfil" class="view hidden">
+        <div class="page-title">A minha ficha</div>
+        <div class="page-subtitle">Estes dados só podem ser alterados pelo treinador.</div>
+        <div id="perfilConteudo"></div>
+    </div>
+
+    <div id="view-treinos" class="view hidden">
+        <div class="page-title">Treinos</div>
+        <div class="page-subtitle">Consulta o plano de treino, a tua presença e regista o teu esforço.</div>
+        <div class="card"><div id="listaTreinos"></div></div>
+    </div>
+
+    <div id="view-treino-detalhe" class="view hidden">
+        <button class="btn btn-secondary btn-sm" onclick="voltarAosTreinos()" style="margin-bottom:16px;">← Voltar aos treinos</button>
+        <div id="treinoDetalheConteudo"></div>
+    </div>
+    <div id="view-jogos" class="view hidden">
+        <div class="page-title">Jogos</div>
+        <div class="page-subtitle">Resultados, tática, as tuas estatísticas e vídeos do jogo.</div>
+        <div class="card"><div id="listaJogos"></div></div>
+    </div>
+
+    <div id="view-jogo-detalhe" class="view hidden">
+        <button class="btn btn-secondary btn-sm" onclick="voltarAosJogos()" style="margin-bottom:16px;">← Voltar aos jogos</button>
+        <div id="jogoDetalheConteudo"></div>
+    </div>
+    <div id="view-estatisticas" class="view hidden">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+                <div class="page-title">Estatísticas</div>
+                <div class="page-subtitle">Rankings, percentagens e gráficos da equipa.</div>
+            </div>
+            <select id="est_filtro_competicao" style="border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:14px;"></select>
+        </div>
+        <div id="estatisticasConteudo"></div>
+    </div>
+
+    <div id="view-calendario" class="view hidden">
+        <div class="page-title">Calendário</div>
+        <div class="page-subtitle">Treinos e jogos do mês.</div>
+        <div class="card"><div id="calendarioConteudo"></div></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="js/supabaseClient.js"></script>
+<script src="js/auth.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>const EH_TREINADOR = false; let MEU_ATLETA_ID = null;</script>
+<script src="js/treinos.js"></script>
+<script src="js/rating.js"></script>
+<script src="js/jogos.js"></script>
+<script src="js/estatisticas.js"></script>
+<script src="js/calendario.js"></script>
+<script>
+let SESSAO = null;
+
+(async () => {
+    const auth = await protegerPagina('jogador');
+    if (!auth) return;
+    SESSAO = auth;
+    document.getElementById('nomeUtilizadorTopo').textContent = auth.perfil.nome_utilizador;
+    await carregarPlantelPublico();
+    await carregarMinhaFicha();
+})();
+
+document.querySelectorAll('#sidebar a[data-view]').forEach(a => {
+    a.addEventListener('click', (e) => {
+        e.preventDefault();
+        document.querySelectorAll('#sidebar a').forEach(x => x.classList.remove('active'));
+        a.classList.add('active');
+        document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+        document.getElementById('view-' + a.dataset.view).classList.remove('hidden');
+        if (a.dataset.view === 'treinos') carregarTreinos();
+        if (a.dataset.view === 'jogos') carregarJogos();
+        if (a.dataset.view === 'estatisticas') { carregarFiltroCompeticoesEstatisticas(); carregarEstatisticas(); }
+        if (a.dataset.view === 'calendario') carregarCalendario();
+    });
+});
+
+async function carregarPlantelPublico() {
+    const { data, error } = await supabase.from('plantel_publico').select('*').eq('ativo', true).order('nome');
+    const grid = document.getElementById('rosterGrid');
+    if (error) { grid.innerHTML = `<div class="empty-state">Erro a carregar plantel.</div>`; return; }
+    grid.innerHTML = data.map(a => `
+        <div class="roster-card">
+            <img class="avatar-lg" src="${a.foto_url || 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(a.nome)}">
+            <div class="roster-name">${a.nome} ${a.capitania === 'capita' ? '<span class="captain-star">C</span>' : a.capitania === 'vice_capita' ? '<span class="captain-star">VC</span>' : a.capitania === 'terceira_capita' ? '<span class="captain-star">3C</span>' : ''}</div>
+            <div class="roster-meta">${a.posicao || ''}</div>
+            <div class="roster-meta">${a.escalao || ''}</div>
+        </div>
+    `).join('');
+}
+
+async function carregarMinhaFicha() {
+    const { data: a, error } = await supabase.from('atletas').select('*').eq('user_id', SESSAO.session.user.id).single();
+    const el = document.getElementById('perfilConteudo');
+    if (error || !a) { el.innerHTML = `<div class="card empty-state">A tua ficha ainda não está associada. Fala com o treinador.</div>`; return; }
+    MEU_ATLETA_ID = a.id;
+    const idade = calcularIdade(a.data_nascimento);
+    el.innerHTML = `
+    <div class="card">
+        <div style="display:flex; gap:20px; align-items:center; margin-bottom:16px;">
+            <img class="avatar-lg" src="${a.foto_url || 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(a.nome)}">
+            <div>
+                <div style="font-size:20px; font-weight:800;">${a.nome}</div>
+                <div class="page-subtitle" style="margin-bottom:0;">${a.posicao || '—'} · ${a.escalao || '—'} ${idade !== null ? '· ' + idade + ' anos' : ''}</div>
+            </div>
+        </div>
+        <table>
+            <tr><th>Nome completo</th><td>${a.nome_completo || '—'}</td></tr>
+            <tr><th>Data de nascimento</th><td>${a.data_nascimento || '—'}</td></tr>
+            <tr><th>País de nascimento</th><td>${a.pais_nascimento || '—'}</td></tr>
+            <tr><th>Nacionalidade</th><td>${a.nacionalidade || '—'}</td></tr>
+            <tr><th>Contacto</th><td>${a.contacto || '—'}</td></tr>
+            <tr><th>Anos de prática federada</th><td>${a.anos_pratica_federada ?? '—'}</td></tr>
+            <tr><th>Clube anterior</th><td>${a.clube_anterior || '—'}</td></tr>
+            <tr><th>Escola</th><td>${a.escola || '—'} ${a.ano_escolar ? '(' + a.ano_escolar + ')' : ''}</td></tr>
+        </table>
+    </div>`;
+}
+</script>
+</body>
+</html>
