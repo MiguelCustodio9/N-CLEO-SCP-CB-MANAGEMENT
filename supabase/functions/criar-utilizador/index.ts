@@ -40,9 +40,17 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Só o treinador pode criar contas." }), { status: 403, headers: corsHeaders });
     }
 
-    const { username, password, atleta_id } = await req.json();
-    if (!username || !password || !atleta_id) {
+    const { username, password, atleta_id, tipo } = await req.json();
+    const tipoFinal = tipo || (atleta_id ? "jogador" : null);
+
+    if (!username || !password || !tipoFinal) {
       return new Response(JSON.stringify({ error: "Dados em falta." }), { status: 400, headers: corsHeaders });
+    }
+    if (tipoFinal === "jogador" && !atleta_id) {
+      return new Response(JSON.stringify({ error: "Falta indicar a atleta." }), { status: 400, headers: corsHeaders });
+    }
+    if (!["jogador", "treinador"].includes(tipoFinal)) {
+      return new Response(JSON.stringify({ error: "Tipo de utilizador inválido." }), { status: 400, headers: corsHeaders });
     }
 
     // cliente admin (service role) — só existe aqui dentro, nunca no browser
@@ -62,14 +70,16 @@ Deno.serve(async (req) => {
 
     const { error: erroPerfil } = await supabaseAdmin.from("perfis").insert({
       id: novo.user.id,
-      tipo_utilizador: "jogador",
+      tipo_utilizador: tipoFinal,
       nome_utilizador: username.trim(),
     });
     if (erroPerfil) return new Response(JSON.stringify({ error: erroPerfil.message }), { status: 400, headers: corsHeaders });
 
-    const { error: erroLigar } = await supabaseAdmin.from("atletas")
-      .update({ user_id: novo.user.id }).eq("id", atleta_id);
-    if (erroLigar) return new Response(JSON.stringify({ error: erroLigar.message }), { status: 400, headers: corsHeaders });
+    if (tipoFinal === "jogador") {
+      const { error: erroLigar } = await supabaseAdmin.from("atletas")
+        .update({ user_id: novo.user.id }).eq("id", atleta_id);
+      if (erroLigar) return new Response(JSON.stringify({ error: erroLigar.message }), { status: 400, headers: corsHeaders });
+    }
 
     return new Response(JSON.stringify({ ok: true, user_id: novo.user.id }), { status: 200, headers: corsHeaders });
   } catch (e) {

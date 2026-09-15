@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function criarAcessoAtleta(atletaId, username, password) {
     try {
         const { data, error } = await supabase.functions.invoke('criar-utilizador', {
-            body: { username, password, atleta_id: atletaId }
+            body: { username, password, atleta_id: atletaId, tipo: 'jogador' }
         });
         if (error) throw error;
         if (data && data.error) throw new Error(data.error);
@@ -103,6 +103,28 @@ async function criarAcessoAtleta(atletaId, username, password) {
     } catch (err) {
         mostrarToast('Não foi possível criar o acesso (a Edge Function "criar-utilizador" está deployada no Supabase?). ' + (err.message || ''), 'error');
     }
+}
+
+function visualizarFotoAtleta(event) {
+    const ficheiro = event.target.files[0];
+    if (!ficheiro) return;
+    document.getElementById('previewFotoAtleta').src = URL.createObjectURL(ficheiro);
+}
+
+async function carregarFotoAtleta() {
+    const input = document.getElementById('fa_foto_ficheiro');
+    const ficheiro = input.files[0];
+    if (!ficheiro) { mostrarToast('Escolhe uma foto primeiro.', 'error'); return; }
+    const extensao = ficheiro.name.split('.').pop();
+    const caminho = `atleta-${ATLETA_ATUAL.id}-${Date.now()}.${extensao}`;
+    const { error: erroUpload } = await supabase.storage.from('fotos-atletas').upload(caminho, ficheiro, { upsert: true });
+    if (erroUpload) { mostrarToast('Erro ao carregar foto: ' + erroUpload.message, 'error'); return; }
+    const { data: urlPublico } = supabase.storage.from('fotos-atletas').getPublicUrl(caminho);
+    const { error } = await supabase.from('atletas').update({ foto_url: urlPublico.publicUrl }).eq('id', ATLETA_ATUAL.id);
+    if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
+    mostrarToast('Foto atualizada.', 'success');
+    await carregarPlantel();
+    abrirFichaAtleta(ATLETA_ATUAL.id);
 }
 
 // ---------------- ELIMINAR ATLETA ----------------
@@ -183,12 +205,18 @@ function renderTabAtleta(tab) {
     if (tab === 'dados') {
         el.innerHTML = `
         <div class="card">
+            <div style="display:flex; align-items:center; gap:18px; margin-bottom:18px; flex-wrap:wrap;">
+                <img id="previewFotoAtleta" class="avatar-lg" src="${a.foto_url || 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(a.nome)}">
+                <div>
+                    <div class="field" style="margin-bottom:8px;"><label>Foto da atleta</label><input type="file" id="fa_foto_ficheiro" accept="image/*" onchange="visualizarFotoAtleta(event)"></div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="carregarFotoAtleta()">Carregar foto</button>
+                </div>
+            </div>
             <form id="formEditarAtleta">
                 <fieldset><legend>Dados pessoais</legend>
                     <div class="grid grid-2">
                         ${campo('Nome', 'nome', a.nome, 'text', true)}
                         ${campo('Nome completo', 'nome_completo', a.nome_completo)}
-                        ${campo('Foto (URL)', 'foto_url', a.foto_url, 'text')}
                         ${campo('Data de nascimento', 'data_nascimento', a.data_nascimento, 'date')}
                         ${campo('Idade', null, idade !== null ? idade + ' anos' : '', 'text', false, true)}
                         ${campo('País de nascimento', 'pais_nascimento', a.pais_nascimento)}
@@ -472,69 +500,128 @@ async function criarAcessoDaFicha() {
 async function gerarFichaPDF() {
     const a = ATLETA_ATUAL;
     const idade = calcularIdade(a.data_nascimento);
+    const menor = idade !== null && idade < 18;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    let y = 18;
-    const linha = (txt, tam, negrito) => {
-        doc.setFontSize(tam || 11);
-        doc.setFont(undefined, negrito ? 'bold' : 'normal');
-        doc.text(String(txt), 14, y);
-        y += (tam || 11) * 0.5 + 3;
-    };
 
-    linha('Núcleo SCP Castelo Branco — Ficha Individual', 16, true);
-    linha(a.nome, 13, true);
-    y += 2;
-    linha(`Nome completo: ${a.nome_completo || '—'}`);
-    linha(`Data de nascimento: ${a.data_nascimento || '—'}  (Idade: ${idade ?? '—'})`);
-    linha(`País de nascimento: ${a.pais_nascimento || '—'}   Nacionalidade: ${a.nacionalidade || '—'}`);
-    linha(`Dupla nacionalidade: ${a.dupla_nacionalidade || '—'}`);
-    linha(`Contacto: ${a.contacto || '—'}`);
-    y += 2;
-    linha('Futsal', 13, true);
-    linha(`Escalão: ${a.escalao || '—'}   Posição: ${a.posicao || '—'}`);
-    linha(`Anos de prática federada: ${a.anos_pratica_federada ?? '—'}   Clube anterior: ${a.clube_anterior || '—'}`);
-    linha(`Desportos extra-futsal: ${a.desportos_extra || '—'}`);
-    linha(`Atividades extra-desporto: ${a.atividades_extra || '—'}`);
-    linha(`Capitania: ${a.capitania === 'capita' ? 'Capitã' : a.capitania === 'vice_capita' ? 'Vice-Capitã' : a.capitania === 'terceira_capita' ? '3ª Capitã' : '—'}`);
-    y += 2;
+    let y = await desenharCabecalhoPDF(doc, 'Ficha Individual', a.nome);
 
-    if (idade !== null && idade < 18) {
-        linha('Encarregados de Educação', 13, true);
-        linha(`Pai: ${a.nome_pai || '—'}  (${a.contacto_pai || '—'})`);
-        linha(`Mãe: ${a.nome_mae || '—'}  (${a.contacto_mae || '—'})`);
-        linha(`Email do encarregado de educação: ${a.email_encarregado || '—'}`);
-        y += 2;
+    // foto (se existir e conseguir carregar como base64)
+    let xTexto = 14;
+    if (a.foto_url) {
+        try {
+            const resp = await fetch(a.foto_url);
+            const blob = await resp.blob();
+            const base64 = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+            doc.addImage(base64, 26, y, 26, 26);
+            xTexto = 58;
+        } catch {}
+    }
+    doc.setFont(undefined, 'bold'); doc.setFontSize(15);
+    doc.text(a.nome, xTexto, y + 8);
+    doc.setFont(undefined, 'normal'); doc.setFontSize(10);
+    doc.setTextColor(...COR_CINZA_PDF);
+    doc.text(`${a.posicao || 'Posição não definida'} · ${a.escalao || 'Escalão não definido'}${idade !== null ? ' · ' + idade + ' anos' : ''}`, xTexto, y + 15);
+    if (a.capitania) {
+        const label = a.capitania === 'capita' ? 'CAPITÃ' : a.capitania === 'vice_capita' ? 'VICE-CAPITÃ' : '3ª CAPITÃ';
+        doc.setTextColor(...COR_CLUBE_PDF); doc.setFont(undefined, 'bold'); doc.setFontSize(9);
+        doc.text(label, xTexto, y + 21);
+    }
+    doc.setTextColor(...COR_TEXTO_PDF);
+    y += 32;
+
+    y = tituloSeccaoPDF(doc, 'Dados Pessoais', y);
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        theme: 'plain',
+        body: [
+            ['Nome completo', a.nome_completo || '—'],
+            ['Data de nascimento', `${a.data_nascimento || '—'} (${idade ?? '—'} anos)`],
+            ['País de nascimento / Nacionalidade', `${a.pais_nascimento || '—'} / ${a.nacionalidade || '—'}`],
+            ['Dupla nacionalidade', a.dupla_nacionalidade || '—'],
+            ['Contacto', a.contacto || '—'],
+        ],
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+    }));
+    y = doc.lastAutoTable.finalY + 8;
+
+    y = tituloSeccaoPDF(doc, 'Futsal', y);
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        theme: 'plain',
+        body: [
+            ['Anos de prática federada', String(a.anos_pratica_federada ?? '—')],
+            ['Clube anterior', a.clube_anterior || '—'],
+            ['Desportos extra-futsal', a.desportos_extra || '—'],
+            ['Atividades extra-desporto', a.atividades_extra || '—'],
+        ],
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+    }));
+    y = doc.lastAutoTable.finalY + 8;
+
+    if (menor) {
+        y = tituloSeccaoPDF(doc, 'Encarregados de Educação', y);
+        doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+            theme: 'plain',
+            body: [
+                ['Pai', `${a.nome_pai || '—'} (${a.contacto_pai || '—'})`],
+                ['Mãe', `${a.nome_mae || '—'} (${a.contacto_mae || '—'})`],
+                ['Email do encarregado de educação', a.email_encarregado || '—'],
+            ],
+            columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+        }));
+        y = doc.lastAutoTable.finalY + 8;
     }
 
-    linha('Escola', 13, true);
-    linha(`Escola: ${a.escola || '—'}   Ano: ${a.ano_escolar || '—'}   Disciplina favorita: ${a.disciplina_favorita || '—'}`);
-    y += 2;
+    y = tituloSeccaoPDF(doc, 'Escola', y);
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        theme: 'plain',
+        body: [
+            ['Escola', a.escola || '—'],
+            ['Ano escolar', a.ano_escolar || '—'],
+            ['Disciplina favorita', a.disciplina_favorita || '—'],
+        ],
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } },
+    }));
+    y = doc.lastAutoTable.finalY + 8;
 
     const { data: fisico } = await supabase.from('acompanhamento_fisico').select('*').eq('atleta_id', a.id);
     const { data: tecnico } = await supabase.from('acompanhamento_tecnico').select('*').eq('atleta_id', a.id);
     const { data: clinico } = await supabase.from('historico_clinico').select('*').eq('atleta_id', a.id);
 
-    linha('Acompanhamento Físico', 13, true);
-    MOMENTOS.forEach(([chave, label]) => {
-        const r = (fisico || []).find(x => x.momento === chave);
-        linha(`${label}: Peso ${r?.peso_kg ?? '—'} kg | Altura ${r?.altura_cm ?? '—'} cm | IMC ${r?.imc ?? '—'}`);
-    });
-    y += 2;
+    if (y > 230) { doc.addPage(); y = 20; }
+    y = tituloSeccaoPDF(doc, 'Acompanhamento Físico', y);
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        head: [['Momento', 'Peso (kg)', 'Altura (cm)', 'IMC']],
+        body: MOMENTOS.map(([chave, label]) => {
+            const r = (fisico || []).find(x => x.momento === chave);
+            return [label, r?.peso_kg ?? '—', r?.altura_cm ?? '—', r?.imc ?? '—'];
+        }),
+    }));
+    y = doc.lastAutoTable.finalY + 8;
 
-    linha('Acompanhamento Técnico', 13, true);
-    MOMENTOS.forEach(([chave, label]) => {
-        const r = (tecnico || []).find(x => x.momento === chave);
-        linha(`${label}: Passe ${r?.passe ?? '—'} | Receção/Controlo/Domínio ${r?.recepcao_controlo_dominio ?? '—'} | Condução ${r?.conducao ?? '—'} | Remate ${r?.remate ?? '—'}`);
-    });
-    y += 2;
+    if (y > 230) { doc.addPage(); y = 20; }
+    y = tituloSeccaoPDF(doc, 'Acompanhamento Técnico', y);
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        head: [['Momento', 'Passe', 'Receção/Controlo/Domínio', 'Condução', 'Remate']],
+        body: MOMENTOS.map(([chave, label]) => {
+            const r = (tecnico || []).find(x => x.momento === chave);
+            return [label, r?.passe ?? '—', r?.recepcao_controlo_dominio ?? '—', r?.conducao ?? '—', r?.remate ?? '—'];
+        }),
+    }));
+    y = doc.lastAutoTable.finalY + 8;
 
-    linha('Histórico Clínico e de Saúde', 13, true);
+    if (y > 220) { doc.addPage(); y = 20; }
+    y = tituloSeccaoPDF(doc, 'Histórico Clínico e de Saúde', y);
+    const tipoLabel = { lesao: 'Lesão', medicacao: 'Medicação', problema_saude: 'Problema de saúde' };
     if (clinico && clinico.length) {
-        clinico.forEach(r => linha(`[${r.tipo}] ${r.titulo} — ${r.data_inicio || ''}${r.data_fim ? ' a ' + r.data_fim : ''}${r.descricao ? ': ' + r.descricao : ''}`, 10));
+        doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+            head: [['Tipo', 'Título', 'Período', 'Descrição']],
+            body: clinico.map(r => [tipoLabel[r.tipo] || r.tipo, r.titulo, `${r.data_inicio || ''}${r.data_fim ? ' a ' + r.data_fim : ''}`, r.descricao || '—']),
+        }));
     } else {
-        linha('Sem registos.', 10);
+        doc.setFontSize(10); doc.setTextColor(...COR_CINZA_PDF);
+        doc.text('Sem registos clínicos.', 14, y);
     }
 
+    desenharRodapePDF(doc);
     doc.save(`Ficha_${a.nome.replace(/\s+/g, '_')}.pdf`);
 }

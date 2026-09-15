@@ -65,7 +65,8 @@ button { font-family: inherit; cursor: pointer; }
 .sidebar a:hover, .sidebar a.active {
     background: rgba(255,255,255,.12); color: #fff; border-left-color: #fff;
 }
-.sidebar a .ico { width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.sidebar a .ico { width: 22px; height: 22px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.sidebar a .ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .sidebar a span.label {
     font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .15s;
 }
@@ -174,6 +175,19 @@ tbody tr:hover { background: #f8fafc; }
 
 .captain-star { color: var(--warn); font-weight: 800; font-size: 12px; }
 
+.tactic-pitch {
+    position: relative; width: 100%; max-width: 280px; aspect-ratio: 3/4; margin: 0 auto;
+    background: linear-gradient(180deg, #0a7a3c, #086b34);
+    border-radius: 12px; border: 2px solid rgba(255,255,255,.5);
+}
+.tactic-pitch::before {
+    content: ''; position: absolute; inset: 10px; border: 1.5px solid rgba(255,255,255,.4); border-radius: 6px;
+}
+.tactic-slot { position: absolute; transform: translate(-50%, -50%); text-align: center; width: 84px; }
+.tactic-slot-label { color: #fff; font-size: 10px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.4); margin-bottom: 3px; }
+.tactic-slot select { width: 100%; font-size: 11px; padding: 3px 4px; border-radius: 6px; border: none; }
+.tactic-slot-nome { background: #fff; color: var(--ink); font-size: 11px; font-weight: 700; padding: 3px 6px; border-radius: 6px; }
+
 .hidden { display: none !important; }
 
 .pill-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
@@ -202,6 +216,8 @@ tbody tr:hover { background: #f8fafc; }
 .cal-evento { font-size: 11px; font-weight: 600; padding: 3px 6px; border-radius: 6px; margin-bottom: 3px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-treino { background: #dbeafe; color: #1d4ed8; }
 .cal-jogo { background: #dcfce7; color: #15803d; }
+.cal-evento-extra { background: #ede9fe; color: #6d28d9; }
 .cal-legenda { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
 span.cal-legenda.cal-treino { background: #1d4ed8; }
 span.cal-legenda.cal-jogo { background: #15803d; }
+span.cal-legenda.cal-evento-extra { background: #6d28d9; }

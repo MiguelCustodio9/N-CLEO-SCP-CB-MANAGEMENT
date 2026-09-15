@@ -35,7 +35,10 @@ async function carregarTreinos() {
                 <td>${(t.hora_inicio || '').slice(0,5)} - ${(t.hora_fim || '').slice(0,5)}</td>
                 <td>${t.local || '—'}</td>
                 <td>${t.fechado ? '<span class="badge badge-gray">Fechado</span>' : '<span class="badge badge-green">Aberto</span>'}</td>
-                <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); abrirTreino('${t.id}')">Ver</button></td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); abrirTreino('${t.id}')">Ver</button>
+                    ${EH_TREINADOR ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); eliminarTreino('${t.id}')">Eliminar</button>` : ''}
+                </td>
             </tr>
         `).join('')}
         </tbody>
@@ -98,8 +101,11 @@ async function abrirTreino(id) {
             <button class="btn btn-secondary btn-sm" onclick="descarregarPresencasPDF()">📄 Presenças (PDF)</button>
             <button class="btn btn-secondary btn-sm" onclick="descarregarEsforcoPDF()">📄 Esforço (PDF)</button>
             ${!t.fechado ? `<button class="btn btn-danger btn-sm" onclick="fecharTreino()">Fechar treino</button>` : `<span class="badge badge-gray">Treino fechado</span>`}
+            <button class="btn btn-danger btn-sm" onclick="eliminarTreino('${t.id}')">Eliminar treino</button>
         `;
     }
+
+    const souGR = !EH_TREINADOR && typeof MEU_POSICAO !== 'undefined' && MEU_POSICAO === 'Guarda-Redes';
 
     document.getElementById('treinoDetalheConteudo').innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
@@ -120,6 +126,18 @@ async function abrirTreino(id) {
                 </div>` : ''}
             </fieldset>
         </div>
+
+        ${(EH_TREINADOR || souGR) ? `
+        <div class="card">
+            <fieldset><legend>Plano de treino — Guarda-Redes <span class="badge badge-blue">só visível às guarda-redes</span></legend>
+                ${t.plano_treino_gr_url ? `<a href="${t.plano_treino_gr_url}" target="_blank" class="btn btn-secondary btn-sm">⬇️ Transferir plano de GR</a>` : `<div class="page-subtitle" style="margin-bottom:8px;">Ainda não há plano específico de guarda-redes.</div>`}
+                ${EH_TREINADOR && !t.fechado ? `
+                <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <input type="file" id="ficheiroPlanoGR">
+                    <button class="btn btn-primary btn-sm" onclick="carregarPlanoTreinoGR()">Carregar ficheiro</button>
+                </div>` : ''}
+            </fieldset>
+        </div>` : ''}
 
         <div class="card">
             <fieldset><legend>Folha de presenças</legend>
@@ -204,12 +222,34 @@ async function carregarPlanoTreino() {
     abrirTreino(TREINO_ATUAL.id);
 }
 
+async function carregarPlanoTreinoGR() {
+    const input = document.getElementById('ficheiroPlanoGR');
+    const ficheiro = input.files[0];
+    if (!ficheiro) { mostrarToast('Escolhe um ficheiro primeiro.', 'error'); return; }
+    const caminho = `treino-${TREINO_ATUAL.numero}-gr-${Date.now()}-${ficheiro.name}`;
+    const { error: erroUpload } = await supabase.storage.from('planos-treino').upload(caminho, ficheiro, { upsert: true });
+    if (erroUpload) { mostrarToast('Erro ao carregar: ' + erroUpload.message, 'error'); return; }
+    const { data: urlPublico } = supabase.storage.from('planos-treino').getPublicUrl(caminho);
+    const { error } = await supabase.from('treinos').update({ plano_treino_gr_url: urlPublico.publicUrl }).eq('id', TREINO_ATUAL.id);
+    if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
+    mostrarToast('Plano de guarda-redes carregado.', 'success');
+    abrirTreino(TREINO_ATUAL.id);
+}
+
 async function fecharTreino() {
     if (!confirm('Fechar este treino? Depois de fechado, presenças e esforço deixam de poder ser alterados.')) return;
     const { error } = await supabase.from('treinos').update({ fechado: true }).eq('id', TREINO_ATUAL.id);
     if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
     mostrarToast('Treino fechado.', 'success');
     abrirTreino(TREINO_ATUAL.id);
+}
+
+async function eliminarTreino(id) {
+    if (!confirm('Eliminar este treino e todas as presenças/avaliações associadas? Esta ação não pode ser revertida.')) return;
+    const { error } = await supabase.from('treinos').delete().eq('id', id);
+    if (error) { mostrarToast('Erro ao eliminar: ' + error.message, 'error'); return; }
+    mostrarToast('Treino eliminado.', 'success');
+    voltarAosTreinos();
 }
 
 function voltarAosTreinos() {
@@ -231,20 +271,17 @@ async function descarregarPresencasPDF() {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFontSize(15); doc.setFont(undefined, 'bold');
-    doc.text(`Folha de Presenças — Treino #${t.numero}`, 14, 18);
-    doc.setFontSize(11); doc.setFont(undefined, 'normal');
-    doc.text(`${formatarData(t.dia)}  ·  ${(t.hora_inicio||'').slice(0,5)}-${(t.hora_fim||'').slice(0,5)}  ·  ${t.local || ''}`, 14, 26);
+    let y = await desenharCabecalhoPDF(doc, 'Folha de Presenças', `Treino #${t.numero}`);
+    doc.setFontSize(10); doc.setTextColor(...COR_CINZA_PDF);
+    doc.text(`${formatarData(t.dia)}  ·  ${(t.hora_inicio||'').slice(0,5)}-${(t.hora_fim||'').slice(0,5)}  ·  ${t.local || ''}`, 14, y);
+    y += 8;
 
-    let y = 40;
-    doc.setFont(undefined, 'bold'); doc.text('Atleta', 14, y); doc.text('Estado', 130, y); doc.setFont(undefined, 'normal');
-    y += 6;
-    (atletas || []).forEach(a => {
-        doc.text(a.nome, 14, y);
-        doc.text(labelDe(mapa[a.id]), 130, y);
-        y += 7;
-        if (y > 280) { doc.addPage(); y = 20; }
-    });
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        head: [['Atleta', 'Estado']],
+        body: (atletas || []).map(a => [a.nome, labelDe(mapa[a.id])]),
+    }));
+
+    desenharRodapePDF(doc);
     doc.save(`Presencas_Treino_${t.numero}.pdf`);
 }
 
@@ -256,19 +293,16 @@ async function descarregarEsforcoPDF() {
 
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFontSize(15); doc.setFont(undefined, 'bold');
-    doc.text(`Avaliação de Esforço — Treino #${t.numero}`, 14, 18);
-    doc.setFontSize(11); doc.setFont(undefined, 'normal');
-    doc.text(`${formatarData(t.dia)}`, 14, 26);
+    let y = await desenharCabecalhoPDF(doc, 'Avaliação de Esforço', `Treino #${t.numero}`);
+    doc.setFontSize(10); doc.setTextColor(...COR_CINZA_PDF);
+    doc.text(formatarData(t.dia), 14, y);
+    y += 8;
 
-    let y = 40;
-    doc.setFont(undefined, 'bold'); doc.text('Atleta', 14, y); doc.text('Esforço (1-5)', 130, y); doc.setFont(undefined, 'normal');
-    y += 6;
-    (atletas || []).forEach(a => {
-        doc.text(a.nome, 14, y);
-        doc.text(mapa[a.id] ? String(mapa[a.id]) : '—', 130, y);
-        y += 7;
-        if (y > 280) { doc.addPage(); y = 20; }
-    });
+    doc.autoTable(Object.assign(estiloTabelaPDF(y), {
+        head: [['Atleta', 'Esforço (1-5)']],
+        body: (atletas || []).map(a => [a.nome, mapa[a.id] ? String(mapa[a.id]) : '—']),
+    }));
+
+    desenharRodapePDF(doc);
     doc.save(`Esforco_Treino_${t.numero}.pdf`);
 }
