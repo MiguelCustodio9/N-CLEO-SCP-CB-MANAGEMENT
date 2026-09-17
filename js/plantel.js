@@ -39,7 +39,13 @@ async function carregarPlantel() {
 
 // ---------------- CRIAR ATLETA ----------------
 function abrirModalNovaAtleta() { document.getElementById('modalNovaAtleta').classList.add('active'); }
-function fecharModalNovaAtleta() { document.getElementById('modalNovaAtleta').classList.remove('active'); document.getElementById('formNovaAtleta').reset(); }
+function fecharModalNovaAtleta() { document.getElementById('modalNovaAtleta').classList.remove('active'); document.getElementById('formNovaAtleta').reset(); document.getElementById('na_foto_preview').src = 'https://api.dicebear.com/7.x/initials/svg?seed=Atleta'; }
+
+function visualizarFotoNovaAtleta(event) {
+    const ficheiro = event.target.files[0];
+    if (!ficheiro) return;
+    document.getElementById('na_foto_preview').src = URL.createObjectURL(ficheiro);
+}
 
 function atualizarIdadePreview() {
     const v = document.getElementById('na_data_nascimento').value;
@@ -78,6 +84,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const { data: nova, error } = await supabase.from('atletas').insert(payload).select().single();
         if (error) { mostrarToast('Erro ao guardar: ' + error.message, 'error'); return; }
+
+        const ficheiroFoto = document.getElementById('na_foto_ficheiro').files[0];
+        if (ficheiroFoto) {
+            const caminho = `atleta-${nova.id}-${Date.now()}-${ficheiroFoto.name}`;
+            const { error: erroUpload } = await supabase.storage.from('fotos-atletas').upload(caminho, ficheiroFoto, { upsert: true });
+            if (!erroUpload) {
+                const { data: urlPublico } = supabase.storage.from('fotos-atletas').getPublicUrl(caminho);
+                await supabase.from('atletas').update({ foto_url: urlPublico.publicUrl }).eq('id', nova.id);
+            } else {
+                mostrarToast('Atleta criada, mas a foto falhou: ' + erroUpload.message, 'error');
+            }
+        }
 
         const username = document.getElementById('na_username').value.trim();
         const password = document.getElementById('na_password').value;

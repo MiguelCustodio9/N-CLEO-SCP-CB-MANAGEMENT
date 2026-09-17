@@ -90,13 +90,11 @@ function renderEstatisticas(jogos, stats) {
 
     const el = document.getElementById('estatisticasConteudo');
     el.innerHTML = `
-        <div class="grid grid-4">
+        <div class="grid grid-6">
             ${cartaoResumo(jogos.length, 'Jogos')}
             ${cartaoResumo(vitorias, 'Vitórias', 'badge-green')}
             ${cartaoResumo(empates, 'Empates', 'badge-gray')}
             ${cartaoResumo(derrotas, 'Derrotas', 'badge-red')}
-        </div>
-        <div class="grid grid-2" style="margin-top:16px;">
             ${cartaoResumo(golosMarcados, 'Golos marcados')}
             ${cartaoResumo(golosSofridos, 'Golos sofridos')}
         </div>

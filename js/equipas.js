@@ -64,6 +64,5 @@ async function eliminarEquipa(id) {
 async function popularSelectEquipas(selectEl, valorAtual) {
     if (!EQUIPAS_CACHE.length) await carregarEquipas();
     selectEl.innerHTML = `<option value="">— escolhe a equipa —</option>` +
-        EQUIPAS_CACHE.map(eq => `<option value="${eq.id}" ${eq.id === valorAtual ? 'selected' : ''}>${eq.nome}</option>`).join('') +
-        `<option value="__nova__">+ Criar nova equipa…</option>`;
+        EQUIPAS_CACHE.map(eq => `<option value="${eq.id}" ${eq.id === valorAtual ? 'selected' : ''}>${eq.nome}</option>`).join('');
 }

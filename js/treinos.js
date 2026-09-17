@@ -25,6 +25,7 @@ async function carregarTreinos() {
         return;
     }
     lista.innerHTML = `
+    <div style="overflow-x:auto;">
     <table>
         <thead><tr><th>Nº</th><th>Dia</th><th>Horário</th><th>Local</th><th>Estado</th><th></th></tr></thead>
         <tbody>
@@ -42,7 +43,8 @@ async function carregarTreinos() {
             </tr>
         `).join('')}
         </tbody>
-    </table>`;
+    </table>
+    </div>`;
 }
 
 function formatarData(iso) {

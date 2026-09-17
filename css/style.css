@@ -103,7 +103,11 @@ button { font-family: inherit; cursor: pointer; }
 .grid-2 { grid-template-columns: 1fr 1fr; }
 .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 900px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+.grid-6 { grid-template-columns: repeat(6, 1fr); }
+@media (max-width: 900px) { .grid-2, .grid-3, .grid-4, .grid-6 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .grid-2, .grid-3, .grid-4, .grid-6 { grid-template-columns: 1fr; } }
+.grid + .grid, .card + .grid, .grid + .card { margin-top: 20px; }
+.grid .card { margin: 0; }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 13px; font-weight: 600; color: var(--muted); }

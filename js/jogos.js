@@ -153,6 +153,20 @@ async function abrirCompeticao(id) {
     document.getElementById('competicaoDetalheConteudo').innerHTML = `
         <div class="page-title">${c.nome}</div>
         <div class="page-subtitle">${c.epoca || ''} ${c.tipo ? '· ' + c.tipo : ''} · ${c.formato === 'taca' ? 'Formato de taça' : 'Formato de liga'}</div>
+
+        <div class="card">
+            <fieldset><legend>Editar competição</legend>
+                <form id="formEditarCompeticao" onsubmit="guardarEdicaoCompeticao(event)">
+                    <div class="grid grid-3">
+                        <div class="field"><label>Nome</label><input type="text" id="ec_nome" value="${c.nome}" required></div>
+                        <div class="field"><label>Época</label><input type="text" id="ec_epoca" value="${c.epoca || ''}"></div>
+                        <div class="field"><label>Tipo</label><input type="text" id="ec_tipo" value="${c.tipo || ''}"></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">Guardar alterações</button>
+                </form>
+            </fieldset>
+        </div>
+
         ${corpo}
         <div class="card"><fieldset><legend>Jogos desta competição</legend>
             ${(jogos && jogos.length) ? `<table><thead><tr><th>Data</th><th>Adversário</th><th>Resultado</th></tr></thead><tbody>
@@ -160,6 +174,19 @@ async function abrirCompeticao(id) {
             </tbody></table>` : '<div class="empty-state">Ainda sem jogos.</div>'}
         </fieldset></div>
     `;
+}
+
+async function guardarEdicaoCompeticao(e) {
+    e.preventDefault();
+    const payload = {
+        nome: document.getElementById('ec_nome').value.trim(),
+        epoca: document.getElementById('ec_epoca').value.trim() || null,
+        tipo: document.getElementById('ec_tipo').value.trim() || null,
+    };
+    const { error } = await supabase.from('competicoes').update(payload).eq('id', COMPETICAO_ATUAL.id);
+    if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
+    mostrarToast('Competição atualizada.', 'success');
+    abrirCompeticao(COMPETICAO_ATUAL.id);
 }
 
 async function adicionarFase() {
@@ -191,7 +218,7 @@ async function carregarJogos() {
     if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
     const el = document.getElementById('listaJogos');
     if (!data.length) { el.innerHTML = `<div class="empty-state"><div class="ico">⚽</div>Ainda não há jogos criados.</div>`; return; }
-    el.innerHTML = `<table><thead><tr><th></th><th>Data</th><th>Adversário</th><th>Competição</th><th>Local</th><th>Resultado</th><th>Estado</th><th></th></tr></thead><tbody>
+    el.innerHTML = `<div style="overflow-x:auto;"><table><thead><tr><th></th><th>Data</th><th>Adversário</th><th>Competição</th><th>Local</th><th>Resultado</th><th>Estado</th><th></th></tr></thead><tbody>
         ${data.map(j => {
             const nomeAdv = j.equipas_adversarias?.nome || j.adversario || '—';
             return `<tr style="cursor:pointer;" onclick="abrirJogo('${j.id}')">
@@ -202,9 +229,12 @@ async function carregarJogos() {
             <td>${j.local || '—'}</td>
             <td><strong>${j.golos_equipa ?? 0} - ${j.golos_adversario ?? 0}</strong></td>
             <td>${j.fechado ? '<span class="badge badge-gray">Fechado</span>' : '<span class="badge badge-green">Aberto</span>'}</td>
-            <td>${EH_TREINADOR ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); eliminarJogo('${j.id}')">Eliminar</button>` : ''}</td>
+            <td style="white-space:nowrap;">
+                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); abrirJogo('${j.id}')">Ver</button>
+                ${EH_TREINADOR ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); eliminarJogo('${j.id}')">Eliminar</button>` : ''}
+            </td>
         </tr>`; }).join('')}
-    </tbody></table>`;
+    </tbody></table></div>`;
 }
 
 // ================= NOVO JOGO =================
@@ -215,9 +245,6 @@ async function abrirModalNovoJogo() {
     await popularSelectEquipas(document.getElementById('nj_adversario_id'));
     atualizarBlocoFaseNovoJogo();
     selComp.onchange = atualizarBlocoFaseNovoJogo;
-    document.getElementById('nj_adversario_id').onchange = (e) => {
-        if (e.target.value === '__nova__') { e.target.value = ''; abrirModalNovaEquipa(); }
-    };
     document.getElementById('modalNovoJogo').classList.add('active');
 }
 async function atualizarBlocoFaseNovoJogo() {
@@ -373,14 +400,17 @@ function renderTabJogo(tab) {
                 </div>
                 <div style="display:flex; gap:10px;">
                     <button type="submit" class="btn btn-primary">Guardar</button>
-                    ${!j.fechado ? `<button type="button" class="btn btn-danger" onclick="fecharJogo()">Fechar jogo</button>` : `<span class="badge badge-gray" style="align-self:center;">Jogo fechado</span>`}
+                    ${!j.fechado ? `<button type="button" class="btn btn-danger" onclick="fecharJogo()">Fechar jogo</button>` : `<button type="button" class="btn btn-secondary" onclick="reabrirJogo()">Reabrir jogo</button>`}
+                    ${j.competicao_id ? `<button type="button" class="btn btn-secondary" onclick="abrirCompeticao('${j.competicao_id}')">📊 Ver classificação/fases</button>` : ''}
                 </div>
             </form>` : `
             <table>
                 <tr><th>Tática utilizada</th><td>${j.tatica || '—'}</td></tr>
                 <tr><th>Jornada</th><td>${j.jornada || '—'}</td></tr>
                 <tr><th>Resultado</th><td>${j.golos_equipa ?? 0} - ${j.golos_adversario ?? 0}</td></tr>
-            </table>`}
+            </table>
+            ${j.competicao_id ? `<button type="button" class="btn btn-secondary btn-sm" onclick="abrirCompeticao('${j.competicao_id}')" style="margin-top:10px;">📊 Ver classificação/fases</button>` : ''}
+            `}
         </div>`;
         if (EH_TREINADOR) document.getElementById('formDetalhesJogo').addEventListener('submit', guardarDetalhesJogo);
     }
@@ -411,6 +441,14 @@ async function fecharJogo() {
     if (!confirm('Fechar este jogo? Deixa de poder editar estatísticas depois.')) return;
     const { error } = await supabase.from('jogos').update({ fechado: true }).eq('id', JOGO_ATUAL.id);
     if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
+    abrirJogo(JOGO_ATUAL.id);
+}
+
+async function reabrirJogo() {
+    if (!confirm('Reabrir este jogo para voltares a editar estatísticas e convocatória?')) return;
+    const { error } = await supabase.from('jogos').update({ fechado: false }).eq('id', JOGO_ATUAL.id);
+    if (error) { mostrarToast('Erro: ' + error.message, 'error'); return; }
+    mostrarToast('Jogo reaberto.', 'success');
     abrirJogo(JOGO_ATUAL.id);
 }
 
