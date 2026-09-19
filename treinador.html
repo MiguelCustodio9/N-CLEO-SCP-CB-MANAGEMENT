@@ -11,7 +11,7 @@
 
 <div class="topbar">
     <div class="topbar-left">
-        <div class="topbar-club-logo"><img src="LOGO NSCPCB PNG.png" onerror="this.style.display='none'"></div>
+        <div class="topbar-club-logo"><img src="assets/logo-clube.png" onerror="this.style.display='none'"></div>
         <div class="topbar-club-text">
             <span class="topbar-name">Núcleo SCP Castelo Branco</span>
             <span class="topbar-sigla">Futsal</span>
@@ -348,6 +348,24 @@
             <div style="display:flex; justify-content:flex-end; gap:10px;">
                 <button type="button" class="btn btn-secondary" onclick="fecharModalNovaEquipa()">Cancelar</button>
                 <button type="submit" class="btn btn-primary">Criar equipa</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===================== MODAL: EDITAR EQUIPA ADVERSÁRIA ===================== -->
+<div class="modal-backdrop" id="modalEditarEquipa">
+    <div class="modal" style="max-width:440px;">
+        <div class="modal-header"><h2>Editar Equipa</h2><button class="modal-close" onclick="fecharModalEditarEquipa()">✕</button></div>
+        <form id="formEditarEquipa" onsubmit="guardarEdicaoEquipa(event)">
+            <div style="text-align:center; margin-bottom:14px;">
+                <img id="eeq_logo_preview" class="avatar-lg" style="width:80px; height:80px;">
+            </div>
+            <div class="field"><label>Nome *</label><input type="text" id="eeq_nome" required></div>
+            <div class="field"><label>Trocar logótipo</label><input type="file" id="eeq_logo" accept="image/*" onchange="visualizarLogoEquipaEditada(event)"></div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" class="btn btn-secondary" onclick="fecharModalEditarEquipa()">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Guardar alterações</button>
             </div>
         </form>
     </div>

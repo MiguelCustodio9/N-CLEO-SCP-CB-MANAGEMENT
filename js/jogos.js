@@ -222,7 +222,7 @@ async function carregarJogos() {
         ${data.map(j => {
             const nomeAdv = j.equipas_adversarias?.nome || j.adversario || '—';
             return `<tr style="cursor:pointer;" onclick="abrirJogo('${j.id}')">
-            <td><img src="${j.equipas_adversarias?.logo_url || 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(nomeAdv)}" style="width:26px;height:26px;border-radius:6px;object-fit:contain;"></td>
+            <td><img src="${j.equipas_adversarias?.logo_url || 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(nomeAdv)}" onerror="this.onerror=null; this.src='https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent('${nomeAdv.replace(/'/g, "\\'")}')" style="width:26px;height:26px;border-radius:6px;object-fit:contain;"></td>
             <td>${formatarData(j.data)}</td>
             <td>${j.casa_fora === 'casa' ? 'vs' : '@'} ${nomeAdv}</td>
             <td>${j.competicoes?.nome || '—'}</td>
@@ -311,7 +311,7 @@ async function abrirJogo(id) {
     document.getElementById('jogoDetalheConteudo').innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
             <div style="display:flex; gap:14px; align-items:center;">
-                ${j.equipas_adversarias?.logo_url ? `<img src="${j.equipas_adversarias.logo_url}" style="width:44px;height:44px;object-fit:contain;border-radius:8px;">` : ''}
+                <img src="${j.equipas_adversarias?.logo_url || 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(nomeAdv)}" onerror="this.onerror=null; this.src='https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent('${nomeAdv.replace(/'/g, "\\'")}')" style="width:44px;height:44px;object-fit:contain;border-radius:8px;">
                 <div>
                     <div class="page-title">${j.casa_fora === 'casa' ? 'Núcleo SCP CB vs ' + nomeAdv : nomeAdv + ' vs Núcleo SCP CB'}</div>
                     <div class="page-subtitle">${formatarData(j.data)} · ${(j.hora||'').slice(0,5)} · ${j.local || 'local não definido'} · ${j.competicoes?.nome || 'sem competição'} ${j.competicao_fases?.nome ? '· ' + j.competicao_fases.nome : ''} ${j.jornada ? '· ' + j.jornada : ''} ${j.fechado ? '· <strong>Fechado</strong>' : '· <span class="badge badge-green">Ao vivo/aberto</span>'}</div>
